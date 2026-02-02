@@ -2,6 +2,8 @@
 
 自动构建 [X-AnyLabeling-Server](https://github.com/CVHub520/X-AnyLabeling-Server) 的 Docker 镜像，并发布到 GitHub Container Registry。
 
+[xx025](https://github.com/xx025) 家的机器人 [coda8](https://github.com/coda8/coda8) 建的～想认识它？[点它](https://github.com/coda8/coda8)。
+
 ## 镜像标签
 
 | 标签 | 描述 |
@@ -20,13 +22,15 @@
 
 ```bash
 # CPU 版本
-docker pull ghcr.io/<your-username>/x-anylabeling-server-docker:latest
+docker pull ghcr.io/coda8/x-anylabeling-server-docker:latest
+# 或指定 cpu 标签
+docker pull ghcr.io/coda8/x-anylabeling-server-docker:cpu
 
 # CUDA 版本 (需要 NVIDIA GPU 和 nvidia-docker)
-docker pull ghcr.io/<your-username>/x-anylabeling-server-docker:cuda
+docker pull ghcr.io/coda8/x-anylabeling-server-docker:cuda
 ```
 
-> **注意**: 请将 `<your-username>` 替换为您的 GitHub 用户名。
+> **说明**: 镜像在 [coda8](https://github.com/coda8/coda8) 账户下；若您 Fork 本仓库，请改成您自己的 GitHub 用户名。
 
 ### 运行容器
 
@@ -38,7 +42,7 @@ docker run -d \
   -p 8000:8000 \
   -v ./configs:/app/configs \
   -v ./weights:/app/weights \
-  ghcr.io/<your-username>/x-anylabeling-server-docker:latest
+  ghcr.io/coda8/x-anylabeling-server-docker:latest
 ```
 
 #### CUDA 版本
@@ -50,7 +54,7 @@ docker run -d \
   -p 8000:8000 \
   -v ./configs:/app/configs \
   -v ./weights:/app/weights \
-  ghcr.io/<your-username>/x-anylabeling-server-docker:cuda
+  ghcr.io/coda8/x-anylabeling-server-docker:cuda
 ```
 
 ### 使用 Docker Compose
@@ -62,7 +66,7 @@ version: '3.8'
 
 services:
   x-anylabeling-server:
-    image: ghcr.io/<your-username>/x-anylabeling-server-docker:latest
+    image: ghcr.io/coda8/x-anylabeling-server-docker:latest
     container_name: x-anylabeling-server
     ports:
       - "8000:8000"
@@ -119,7 +123,7 @@ docker run -d \
   -p 8000:8000 \
   -v /path/to/your/server.yaml:/app/configs/server.yaml \
   -v /path/to/your/models.yaml:/app/configs/models.yaml \
-  ghcr.io/<your-username>/x-anylabeling-server-docker:latest \
+  ghcr.io/coda8/x-anylabeling-server-docker:latest \
   x-anylabeling-server --config /app/configs/server.yaml --models-config /app/configs/models.yaml
 ```
 
@@ -168,7 +172,7 @@ remote_server_settings:
 
 #### 方式 B：用 curl 触发本仓库更新（需 PAT）
 
-将 `YOUR_GITHUB_PAT` 换成本仓库有写权限的 [Personal Access Token](https://github.com/settings/tokens)（勾选 `repo`），`OWNER/REPO` 换成本仓库（如 `yourname/x-anylabeling-server-docker`）：
+将 `YOUR_GITHUB_PAT` 换成本仓库有写权限的 [Personal Access Token](https://github.com/settings/tokens)（勾选 `repo`），`OWNER/REPO` 换成本仓库（如 `coda8/x-anylabeling-server-docker`）：
 
 ```bash
 curl -X POST -H "Authorization: token YOUR_GITHUB_PAT" \
@@ -213,10 +217,12 @@ curl -X POST -H "Authorization: token YOUR_GITHUB_PAT" \
 
 本项目遵循 [AGPL-3.0](LICENSE) 许可证。
 
-原项目 X-AnyLabeling-Server 由 [CVHub520](https://github.com/CVHub520) 开发，遵循 AGPL-3.0 许可证。
+原项目 X-AnyLabeling-Server 由 [CVHub520](https://github.com/CVHub520) 开发，遵循 AGPL-3.0 许可证。本仓库由 [coda8](https://github.com/coda8/coda8)（xx025 的 AI 助手）创建，归属 [xx025](https://github.com/xx025)。
 
 ## 相关链接
 
+- [xx025](https://github.com/xx025) - 归属（老板/产品）
+- [coda8](https://github.com/coda8/coda8) - 镜像与仓库在这里（xx025 的 AI 助手）
 - [X-AnyLabeling-Server](https://github.com/CVHub520/X-AnyLabeling-Server) - 上游项目
 - [X-AnyLabeling](https://github.com/CVHub520/X-AnyLabeling) - 客户端应用
 - [GitHub Container Registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry) - 镜像托管文档

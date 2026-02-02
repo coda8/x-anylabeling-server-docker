@@ -36,7 +36,8 @@ jobs:
   check-upstream:
     runs-on: ubuntu-latest
     outputs:
-      should_build: ${{ steps.check.outputs.should_build }}
+      should_build_cpu: ${{ steps.check.outputs.should_build_cpu }}
+      should_build_cuda: ${{ steps.check.outputs.should_build_cuda }}
       version: ${{ steps.check.outputs.version }}
       is_release: ${{ steps.check.outputs.is_release }}
     
@@ -56,16 +57,15 @@ jobs:
             echo "version=$VERSION" >> $GITHUB_OUTPUT
             echo "is_release=false" >> $GITHUB_OUTPUT
             
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
             if [ "${{ github.event.inputs.force_build }}" == "true" ]; then
-              echo "should_build=true" >> $GITHUB_OUTPUT
+              echo "should_build_cpu=true" >> $GITHUB_OUTPUT
+              echo "should_build_cuda=true" >> $GITHUB_OUTPUT
             else
-              # 检查镜像是否已存在
-              if docker manifest inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION} > /dev/null 2>&1; then
-                echo "版本 $VERSION 已存在，跳过构建"
-                echo "should_build=false" >> $GITHUB_OUTPUT
-              else
-                echo "should_build=true" >> $GITHUB_OUTPUT
-              fi
+              docker manifest inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION} > /dev/null 2>&1 && CPU_EXISTS=1 || CPU_EXISTS=0
+              docker manifest inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-cuda > /dev/null 2>&1 && CUDA_EXISTS=1 || CUDA_EXISTS=0
+              [ "$CPU_EXISTS" = 1 ] && echo "CPU 镜像 $VERSION 已存在" && echo "should_build_cpu=false" >> $GITHUB_OUTPUT || echo "should_build_cpu=true" >> $GITHUB_OUTPUT
+              [ "$CUDA_EXISTS" = 1 ] && echo "CUDA 镜像 ${VERSION}-cuda 已存在" && echo "should_build_cuda=false" >> $GITHUB_OUTPUT || echo "should_build_cuda=true" >> $GITHUB_OUTPUT
             fi
             exit 0
           fi
@@ -81,13 +81,10 @@ jobs:
               echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
               IMAGE_TAG="${VERSION}"
               echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
-              if docker manifest inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG} > /dev/null 2>&1; then
-                echo "版本 $IMAGE_TAG 的镜像已存在，跳过构建"
-                echo "should_build=false" >> $GITHUB_OUTPUT
-              else
-                echo "需要构建版本 $IMAGE_TAG"
-                echo "should_build=true" >> $GITHUB_OUTPUT
-              fi
+              docker manifest inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG} > /dev/null 2>&1 && CPU_EXISTS=1 || CPU_EXISTS=0
+              docker manifest inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG}-cuda > /dev/null 2>&1 && CUDA_EXISTS=1 || CUDA_EXISTS=0
+              [ "$CPU_EXISTS" = 1 ] && echo "CPU 镜像 $IMAGE_TAG 已存在" && echo "should_build_cpu=false" >> $GITHUB_OUTPUT || echo "should_build_cpu=true" >> $GITHUB_OUTPUT
+              [ "$CUDA_EXISTS" = 1 ] && echo "CUDA 镜像 ${IMAGE_TAG}-cuda 已存在" && echo "should_build_cuda=false" >> $GITHUB_OUTPUT || echo "should_build_cuda=true" >> $GITHUB_OUTPUT
               exit 0
             fi
           fi
@@ -119,23 +116,17 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
 
-          # 检查镜像是否已存在（对于 release 版本）
+          # 分别检查 CPU / CUDA 镜像是否已存在
           IMAGE_TAG="${VERSION}"
-          
-          # 登录检查镜像是否存在
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
-          
-          if docker manifest inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG} > /dev/null 2>&1; then
-            echo "版本 $IMAGE_TAG 的镜像已存在，跳过构建"
-            echo "should_build=false" >> $GITHUB_OUTPUT
-          else
-            echo "需要构建版本 $IMAGE_TAG"
-            echo "should_build=true" >> $GITHUB_OUTPUT
-          fi
+          docker manifest inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG} > /dev/null 2>&1 && CPU_EXISTS=1 || CPU_EXISTS=0
+          docker manifest inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG}-cuda > /dev/null 2>&1 && CUDA_EXISTS=1 || CUDA_EXISTS=0
+          [ "$CPU_EXISTS" = 1 ] && echo "CPU 镜像 $IMAGE_TAG 已存在" && echo "should_build_cpu=false" >> $GITHUB_OUTPUT || echo "should_build_cpu=true" >> $GITHUB_OUTPUT
+          [ "$CUDA_EXISTS" = 1 ] && echo "CUDA 镜像 ${IMAGE_TAG}-cuda 已存在" && echo "should_build_cuda=false" >> $GITHUB_OUTPUT || echo "should_build_cuda=true" >> $GITHUB_OUTPUT
 
   build-cpu:
     needs: check-upstream
-    if: needs.check-upstream.outputs.should_build == 'true'
+    if: needs.check-upstream.outputs.should_build_cpu == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -194,7 +185,7 @@ jobs:
 
   build-cuda:
     needs: check-upstream
-    if: needs.check-upstream.outputs.should_build == 'true'
+    if: needs.check-upstream.outputs.should_build_cuda == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -254,7 +245,7 @@ jobs:
 
   create-release:
     needs: [check-upstream, build-cpu, build-cuda]
-    if: needs.check-upstream.outputs.is_release == 'true'
+    if: needs.check-upstream.outputs.is_release == 'true' && (needs.build-cpu.result == 'success' || needs.build-cuda.result == 'success')
     runs-on: ubuntu-latest
     permissions:
       contents: write

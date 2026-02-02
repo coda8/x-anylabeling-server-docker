@@ -1,0 +1,95 @@
+# 订阅式更新：仅在被触发时检查上游 release，更新 version.json 与 README 并推送，推送会触发构建
+name: Update upstream version
+
+on:
+  # 本仓库推送时也检查一次（排除仅由 bot 更新的 version.json/README，避免循环）
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'version.json'
+      - 'README.md'
+  # 由外部在「上游发 release 时」调用，实现订阅式更新（见 README 订阅机制）
+  repository_dispatch:
+    types: [upstream-release]
+  workflow_dispatch:
+
+env:
+  UPSTREAM_REPO: CVHub520/X-AnyLabeling-Server
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get upstream latest release and tag SHA
+        id: upstream
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          LATEST=$(gh api repos/${{ env.UPSTREAM_REPO }}/releases/latest --jq '.tag_name' 2>/dev/null || echo "")
+          if [ -z "$LATEST" ]; then
+            LATEST=$(gh api repos/${{ env.UPSTREAM_REPO }}/tags --jq '.[0].name' 2>/dev/null || echo "")
+          fi
+          if [ -z "$LATEST" ]; then
+            echo "无法获取上游版本，跳过"
+            echo "version=" >> $GITHUB_OUTPUT
+            echo "sha=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          # 获取该 tag 对应的 commit SHA，用于去重与追溯
+          SHA=$(gh api repos/${{ env.UPSTREAM_REPO }}/git/ref/tags/${LATEST} --jq '.object.sha' 2>/dev/null || echo "")
+          if [ -z "$SHA" ]; then
+            SHA=$(gh api repos/${{ env.UPSTREAM_REPO }}/commits/${LATEST} --jq '.sha' 2>/dev/null || echo "")
+          fi
+          echo "version=$LATEST" >> $GITHUB_OUTPUT
+          echo "sha=${SHA:-}" >> $GITHUB_OUTPUT
+          echo "上游最新版本: $LATEST (sha: ${SHA:-未知})"
+
+      - name: Read current version and sha
+        id: current
+        run: |
+          if [ -f version.json ]; then
+            CURRENT=$(jq -r '.version // ""' version.json)
+            CURRENT_SHA=$(jq -r '.upstream_sha // ""' version.json)
+          else
+            CURRENT=""
+            CURRENT_SHA=""
+          fi
+          echo "current=$CURRENT" >> $GITHUB_OUTPUT
+          echo "current_sha=$CURRENT_SHA" >> $GITHUB_OUTPUT
+          echo "当前记录版本: ${CURRENT:-无} (sha: ${CURRENT_SHA:-无})"
+
+      - name: Update version.json and README
+        if: steps.upstream.outputs.version != '' && (steps.upstream.outputs.version != steps.current.outputs.current || steps.upstream.outputs.sha != steps.current.outputs.current_sha)
+        run: |
+          VERSION="${{ steps.upstream.outputs.version }}"
+          SHA="${{ steps.upstream.outputs.sha }}"
+          UPDATED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          # 写入 version.json（含 upstream_sha 便于去重与追溯）
+          jq -n \
+            --arg version "$VERSION" \
+            --arg repo "${{ env.UPSTREAM_REPO }}" \
+            --arg updated_at "$UPDATED_AT" \
+            --arg upstream_sha "${SHA}" \
+            '{version: $version, upstream_repo: $repo, updated_at: $updated_at, upstream_sha: $upstream_sha}' > version.json
+
+          # 更新 README 中的跟随版本占位符
+          sed -i "s/当前跟随的上游版本: \*\*[^*]*\*\*/当前跟随的上游版本: **$VERSION**/" README.md || true
+          # 若 README 里是占位符 VERSION_FOLLOWED
+          sed -i "s/VERSION_FOLLOWED/$VERSION/g" README.md || true
+
+      - name: Commit and push
+        if: steps.upstream.outputs.version != '' && (steps.upstream.outputs.version != steps.current.outputs.current || steps.upstream.outputs.sha != steps.current.outputs.current_sha)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add version.json README.md
+          git diff --staged --quiet || git commit -m "chore: follow upstream ${{ steps.upstream.outputs.version }}"
+          git push

@@ -248,7 +248,6 @@ jobs:
             VERSION=${{ needs.check-upstream.outputs.version }}
             PYTHON_VERSION=3.12
             CUDA_VERSION=12.6.3
-            CUDNN_VERSION=9
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64

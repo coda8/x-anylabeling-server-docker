@@ -1,11 +1,11 @@
 # X-AnyLabeling-Server Docker Image (CUDA Version)
 # Auto-built from https://github.com/CVHub520/X-AnyLabeling-Server
 
+# NVIDIA 官方 tag 为 12.6.3-cudnn-runtime-ubuntu22.04（cudnn 无数字）
 ARG CUDA_VERSION=12.6.3
-ARG CUDNN_VERSION=9
 ARG PYTHON_VERSION=3.12
 
-FROM nvidia/cuda:${CUDA_VERSION}-cudnn${CUDNN_VERSION}-runtime-ubuntu22.04
+FROM nvidia/cuda:${CUDA_VERSION}-cudnn-runtime-ubuntu22.04
 
 LABEL org.opencontainers.image.source="https://github.com/CVHub520/X-AnyLabeling-Server"
 LABEL org.opencontainers.image.description="X-AnyLabeling-Server - AI Model Inference Service (CUDA)"

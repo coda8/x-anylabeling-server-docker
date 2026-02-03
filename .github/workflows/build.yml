@@ -15,16 +15,10 @@ on:
         default: 'false'
         type: boolean
 
-  # 当 Dockerfile、version.json（由 update-version 推送）或工作流更新时触发
+  # 本仓库 main 有推送就触发（缺镜像才真构建，不会重复建）
   push:
     branches:
       - main
-    paths:
-      - 'Dockerfile'
-      - 'Dockerfile.cuda'
-      - 'version.json'
-      - 'README.md'
-      - '.github/workflows/build.yml'
 
 env:
   REGISTRY: ghcr.io

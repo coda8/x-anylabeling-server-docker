@@ -1,7 +1,6 @@
 # X-AnyLabeling-Server Docker Image (CUDA Version)
 # Auto-built from https://github.com/CVHub520/X-AnyLabeling-Server
 
-# NVIDIA 官方 tag 为 12.6.3-cudnn-runtime-ubuntu22.04（cudnn 无数字）
 ARG CUDA_VERSION=12.6.3
 ARG PYTHON_VERSION=3.12
 
@@ -11,25 +10,23 @@ LABEL org.opencontainers.image.source="https://github.com/CVHub520/X-AnyLabeling
 LABEL org.opencontainers.image.description="X-AnyLabeling-Server - AI Model Inference Service (CUDA)"
 LABEL org.opencontainers.image.licenses="AGPL-3.0"
 
-# Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    UV_SYSTEM_PYTHON=1 \
     DEBIAN_FRONTEND=noninteractive
 
-# Install system dependencies and Python
+# 系统依赖 + Python（deadsnakes）
 ARG PYTHON_VERSION
 RUN apt-get update && apt-get install -y --no-install-recommends \
     software-properties-common \
+    curl \
+    ca-certificates \
     && add-apt-repository -y ppa:deadsnakes/ppa \
     && apt-get update && apt-get install -y --no-install-recommends \
     python${PYTHON_VERSION} \
     python${PYTHON_VERSION}-venv \
     python${PYTHON_VERSION}-dev \
-    python3-pip \
     git \
-    curl \
     libgl1 \
     libglib2.0-0 \
     libsm6 \
@@ -38,41 +35,29 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Set Python aliases
 RUN update-alternatives --install /usr/bin/python python /usr/bin/python${PYTHON_VERSION} 1 \
     && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python${PYTHON_VERSION} 1
 
-# Upgrade pip
-RUN python -m pip install --upgrade pip
+# 用官方安装脚本装 uv，不依赖 pip（默认在 /root/.local/bin）
+ENV PATH="/root/.local/bin:$PATH"
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Create app directory
 WORKDIR /app
 
-# Clone the repository
 ARG VERSION=main
 RUN git clone --depth 1 --branch ${VERSION} \
     https://github.com/CVHub520/X-AnyLabeling-Server.git . || \
     git clone --depth 1 https://github.com/CVHub520/X-AnyLabeling-Server.git .
 
-# Install PyTorch with CUDA support
-# Using CUDA 12.6 compatible wheels
-RUN pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+# 用 uv 装 PyTorch (CUDA 12.6) 和项目依赖，全程不碰 pip
+RUN uv pip install --system torch torchvision --index-url https://download.pytorch.org/whl/cu126 \
+    && uv pip install --system -e ".[all]"
 
-# Install uv for faster dependency installation
-RUN pip install --upgrade uv
-
-# Install the package with all dependencies
-RUN uv pip install --system -e ".[all]"
-
-# Create directories for configs and weights
 RUN mkdir -p /app/weights /app/logs
 
-# Expose the default port
 EXPOSE 8000
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Default command
 CMD ["x-anylabeling-server", "--host", "0.0.0.0", "--port", "8000"]
